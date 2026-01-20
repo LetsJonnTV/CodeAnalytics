@@ -1,0 +1,8 @@
+.mcp-debug-tools/
+.vscode/
+.idea/
+*.log
+__pycache__/
+*.pyc
+.env
+.json

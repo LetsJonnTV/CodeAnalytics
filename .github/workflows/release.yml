@@ -1,0 +1,102 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            ext: .exe
+          - os: macos-latest
+            name: macos
+            ext: ""
+          - os: ubuntu-latest
+            name: linux
+            ext: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed --name CodeAnalytics-${{ matrix.name }} main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeAnalytics-${{ matrix.name }}
+          path: dist/CodeAnalytics-${{ matrix.name }}${{ matrix.ext }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Extract changelog for tag
+        id: changelog
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "Extracting changelog for version $TAG"
+          
+          # Extract the section for this version from CHANGELOG.md
+          CHANGELOG=$(awk -v ver="$TAG" '
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") found=1
+            }
+            found {print}
+          ' CHANGELOG.md)
+          
+          # If no specific version found, use Unreleased
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG=$(awk '
+              /^## \[Unreleased\]/ {found=1; next}
+              /^## \[/ {if (found) exit}
+              found {print}
+            ' CHANGELOG.md)
+          fi
+          
+          # Write to file for release body
+          echo "$CHANGELOG" > release_notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          files: |
+            artifacts/CodeAnalytics-windows/CodeAnalytics-windows.exe
+            artifacts/CodeAnalytics-macos/CodeAnalytics-macos
+            artifacts/CodeAnalytics-linux/CodeAnalytics-linux
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

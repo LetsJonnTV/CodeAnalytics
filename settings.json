@@ -1,0 +1,9 @@
+{
+  "theme": "solar",
+  "font_size": 11,
+  "font_family": "Consolas",
+  "auto_analyze": true,
+  "show_line_numbers": true,
+  "highlight_syntax": true,
+  "max_recent_files": 10
+}
